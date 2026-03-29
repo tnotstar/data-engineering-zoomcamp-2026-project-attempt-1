@@ -1,105 +1,79 @@
 # ==============================================================
 # Dockerfile.cloudrun
-# Multi-stage build implementing a Medallion Architecture:
-#   Stage 0 (raw)    : Download VCF from NCBI FTP → /data/raw/
-#   Stage 1 (silver) : Transform VCF → TSV          → /data/silver/
-#   Stage 2 (gold)   : Load TSV → Manticore indexes → /data/gold/
-#   Stage 3 (production): Final image with baked /data/, Manticore
-#                         (serving from /data/gold in read-only intent)
-#                         + Gradio dashboard on port 8080
-#
-# Build with:
-#   docker build -f Dockerfile.cloudrun -t eva-cloud-run .
-#
-# Run locally:
-#   docker run -p 8080:8080 eva-cloud-run
+# Single-stage build for Google Cloud Run:
+#   1. Starts from Manticore Search (Gold Layer base)
+#   2. Adds Python, Dashboard (Gradio) and Pipeline (Bruin) dependencies
+#   3. Executes ETL during build to "bake" the /data/gold index
+#   4. Exposes Port 8080 (multi-process via entrypoint)
 # ==============================================================
 
+FROM manticoresearch/manticore:latest
 
-# ==============================================================
-# Stage 0 — raw: Download VCF from NCBI FTP
-# ==============================================================
-FROM python:3.11-slim AS raw
+USER root
 
-RUN apt-get update && \
-    apt-get install -y curl bcftools && \
-    rm -rf /var/lib/apt/lists/*
+# 1. Install system dependencies (from etl-pipeline and dashboard)
+RUN apt-get update && apt-get install -y \
+    python3 python3-pip python3-venv \
+    curl bash tar bcftools tabix \
+    gosu \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /data/raw && \
-    curl -s https://ftp.ncbi.nih.gov/snp/population_frequency/latest_release/freq.vcf.gz | \
-    bcftools view | head -n 1000100 | bcftools view -Oz -o /data/raw/freq-subset.vcf.gz
+# 2. Install Bruin CLI
+RUN curl -sL https://github.com/bruin-data/bruin/releases/latest/download/bruin_Linux_x86_64.tar.gz | tar -xz && \
+    mv bruin /usr/local/bin/bruin && \
+    chmod +x /usr/local/bin/bruin
 
-
-# ==============================================================
-# Stage 1 — silver: Transform VCF → population frequency TSV
-# ==============================================================
-FROM python:3.11-slim AS silver
-
-RUN apt-get update && \
-    apt-get install -y bcftools tabix && \
-    rm -rf /var/lib/apt/lists/*
-
-COPY --from=raw /data/raw /data/raw
-
-COPY build-silver.sh /build-silver.sh
-RUN chmod +x /build-silver.sh && /build-silver.sh
-
-
-# ==============================================================
-# Stage 2 — gold: Load TSV into Manticore → bake index files
-# ==============================================================
-FROM manticoresearch/manticore:latest AS gold
-
-RUN apt-get update && \
-    apt-get install -y python3 python3-pip python3-venv curl && \
-    rm -rf /var/lib/apt/lists/*
-
-# Python virtual environment
+# 3. Create a virtual environment and install Python dependencies
 ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Install ETL Python dependencies
+# Copy requirements files first for caching
+COPY dashboard/requirements.txt /tmp/dashboard-requirements.txt
 COPY etl-pipeline/requirements.txt /tmp/etl-requirements.txt
-RUN pip install --no-cache-dir -r /tmp/etl-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/dashboard-requirements.txt -r /tmp/etl-requirements.txt
 
-# Copy Silver TSV and loader script
-COPY --from=silver /data/silver /data/silver
-COPY etl-pipeline/assets/load_to_manticore.py /tmp/load_to_manticore.py
+# 4. Copy project assets
+# We'll use /pipeline for ETL and /app for Dashboard
+WORKDIR /pipeline
+COPY etl-pipeline/ .
 
-# Run build-time gold loading:
-# Starts Manticore, creates schema, bulk-loads data, stops Manticore.
-# Result: /data/gold/ contains the baked Manticore index files.
-COPY build-gold.sh /build-gold.sh
-RUN chmod +x /build-gold.sh && /build-gold.sh
+WORKDIR /app
+COPY dashboard/ .
 
+# 5. Build-time ETL Execution (pre-populating /data/gold)
+# Need writable dirs for indices, logs, pids
+RUN mkdir -p /data/gold /var/run/manticore /var/log/manticore /tmp/manticore-binlog \
+    && chown -R manticore:manticore /data /var/run/manticore /var/log/manticore /tmp/manticore-binlog
 
-# ==============================================================
-# Stage 3 — production: Final Cloud Run image
-# All three /data layers are baked into the image.
-# Manticore uses /data/gold (read-only by intent) at runtime.
-# Operational files (pid, logs, binlog) are redirected to /tmp.
-# ==============================================================
-FROM manticoresearch/manticore:latest AS production
+# Create build-time Manticore config
+RUN printf 'searchd {\n\
+  listen = 127.0.0.1:9306:mysql\n\
+  listen = 127.0.0.1:9308:http\n\
+  pid_file = /var/run/manticore/searchd.pid\n\
+  data_dir = /data/gold\n\
+  log = /var/log/manticore/searchd.log\n\
+  query_log = /var/log/manticore/query.log\n\
+  binlog_path = /tmp/manticore-binlog\n\
+}\n' > /etc/manticoresearch/manticore.conf
 
-RUN apt-get update && \
-    apt-get install -y python3 python3-pip python3-venv curl && \
-    rm -rf /var/lib/apt/lists/*
+# Run the pipeline during construction
+# We bypass docker compose and use 'bruin run' directly after starting manticore
+# Run the pipeline during construction
+# We bypass docker compose and use 'bruin run' directly after starting manticore
+RUN searchd && \
+    while ! curl -s http://127.0.0.1:9308/ > /dev/null 2>&1; do sleep 1; done && \
+    echo "Manticore is up, starting Bruin pipeline..." && \
+    export MANTICORE_URL="http://127.0.0.1:9308" && \
+    export number_of_variants=100 && \
+    bruin run --force /pipeline --var number_of_variants=100 && \
+    echo "Pipeline finished successfully. Fixing permissions..." && \
+    chown -R manticore:manticore /data /var/run/manticore /var/log/manticore && \
+    ls -R /data && \
+    searchd --stopwait
 
-# Python virtual environment
-ENV VIRTUAL_ENV=/opt/venv
-RUN python3 -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-# Bake all data layers into the image
-COPY --from=raw    /data/raw    /data/raw
-COPY --from=silver /data/silver /data/silver
-COPY --from=gold   /data/gold   /data/gold
-
-# Production Manticore config:
-#   data_dir  → /data/gold  (baked-in index files, read-only by intent)
-#   pid/logs  → /var/run & /var/log (created by entrypoint at startup)
-#   binlog    → /tmp (ephemeral; lost on container restart, safe for read-only use)
+# 6. Final Configuration for Runtime
+# Change Manticore config for production (listening on 0.0.0.0)
 RUN printf 'searchd {\n\
   listen = 0.0.0.0:9306:mysql\n\
   listen = 0.0.0.0:9308:http\n\
@@ -110,13 +84,6 @@ RUN printf 'searchd {\n\
   binlog_path = /tmp/manticore-binlog\n\
 }\n' > /etc/manticoresearch/manticore.conf
 
-# Install Gradio dashboard
-WORKDIR /app
-COPY dashboard/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY dashboard/ .
-
-# Production entrypoint
 COPY deploy-entrypoint.sh /deploy-entrypoint.sh
 RUN chmod +x /deploy-entrypoint.sh
 

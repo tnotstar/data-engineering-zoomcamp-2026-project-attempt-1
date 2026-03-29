@@ -16,17 +16,25 @@ def materialize():
     raw_path = '/data/raw/freq-subset.vcf.gz'
 
     if not os.path.exists(raw_path):
-        raise FileNotFoundError(f"Missing {raw_path}. Did the raw layer run?")
+        # List files in /data/raw for debugging
+        try:
+            files = os.listdir('/data/raw')
+            print(f"Files in /data/raw: {files}")
+        except:
+            pass
+        raise FileNotFoundError(f"Missing {raw_path}. Did the raw layer run successfully?")
 
     # --- SILVER LAYER: /data/silver ---
     os.makedirs('/data/silver', exist_ok=True)
     silver_path = '/data/silver/variantes_poblaciones.tsv'
 
     bash_script = f"""
-    # Generate samples header
+    set -eo pipefail
+    echo "Generating samples header from {raw_path}..."
     samples=$(bcftools query -l {raw_path} | tr '\\n' '\\t')
     echo -e "variant_id\\tchrom\\tpos\\tref\\talt\\t$samples" > {silver_path}
 
+    echo "Extracting AC and AN and computing frequencies..."
     # Extract AC and AN recursively and compute frequencies using awk
     bcftools query -f '%ID\\t%CHROM\\t%POS\\t%REF\\t%ALT[\\t%AC\\t%AN]\\n' {raw_path} | \\
     awk 'BEGIN {{FS="\\t"; OFS="\\t"}} {{
@@ -46,12 +54,15 @@ def materialize():
     process = subprocess.run(["bash", "-c", bash_script], capture_output=True, text=True)
 
     if process.returncode != 0:
-        print(f"Error executing bash pipeline:\n{process.stderr}")
-        raise RuntimeError("Bash pipeline failed.")
+        print(f"Error executing bash pipeline (Exit {process.returncode}):\n{process.stderr}")
+        raise RuntimeError(f"Bash pipeline failed: {process.stderr}")
 
-    print(f"Raw data saved to {raw_path}")
-    print(f"Silver data saved to {silver_path}")
+    if not os.path.exists(silver_path) or os.path.getsize(silver_path) == 0:
+        raise RuntimeError(f"Failed to create silver data file at {silver_path} or file is empty.")
+
+    print(f"Silver data successfully saved to {silver_path} ({os.path.getsize(silver_path)} bytes)")
 
     return pd.DataFrame([{"status": "calculate_frequencies_complete"}])
 
-materialize()
+if __name__ == "__main__":
+    materialize()

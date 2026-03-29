@@ -15,7 +15,7 @@ def materialize():
     tsv_path = '/data/silver/variantes_poblaciones.tsv'
 
     if not os.path.exists(tsv_path):
-        raise FileNotFoundError(f"Missing {tsv_path}. Did the ingestion step run?")
+        raise FileNotFoundError(f"Missing {tsv_path}. Did the silver layer run successfully?")
         
     df = pd.read_csv(
         tsv_path,
@@ -28,7 +28,9 @@ def materialize():
     df = df.replace("NULL", 0.0)
     df = df.fillna(0.0)
     
+    # Use environment variables if set, else fallback
     MANTICORE_URL = os.getenv("MANTICORE_URL", "http://search-engine:9308")
+    print(f"Connecting to Manticore at {MANTICORE_URL}...")
     
     # 1. Drop and Recreate Table to match all 12 ALFA populations
     print("Recreating Manticore table to accommodate 12 populations...")
@@ -109,8 +111,9 @@ def materialize():
                 time.sleep(2)
                 if attempt == max_retries - 1:
                     raise
-            
+    
     print("Loading Task Complete.")
     return pd.DataFrame([{"status": "load_complete"}])
 
-materialize()
+if __name__ == "__main__":
+    materialize()

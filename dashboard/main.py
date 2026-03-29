@@ -367,9 +367,10 @@ with gr.Blocks(
     refresh_btn.click(fn=get_chromosome_distribution, inputs=[], outputs=density_plot)
 
 if __name__ == "__main__":
+    port = int(os.getenv("GRADIO_SERVER_PORT", "7860"))
     app.launch(
         server_name="0.0.0.0", 
-        server_port=7860, 
+        server_port=port, 
         share=False,
         theme=gr.themes.Soft(primary_hue="orange", neutral_hue="slate")
     )
