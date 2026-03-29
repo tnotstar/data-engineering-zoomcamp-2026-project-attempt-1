@@ -1,2 +1,2 @@
 #!/bin/bash
-docker compose up -d dashboard
+docker compose up -d dashboard etl-pipeline

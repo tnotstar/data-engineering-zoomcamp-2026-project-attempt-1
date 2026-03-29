@@ -1,0 +1,127 @@
+# ==============================================================
+# Dockerfile.cloudrun
+# Multi-stage build implementing a Medallion Architecture:
+#   Stage 0 (raw)    : Download VCF from NCBI FTP → /data/raw/
+#   Stage 1 (silver) : Transform VCF → TSV          → /data/silver/
+#   Stage 2 (gold)   : Load TSV → Manticore indexes → /data/gold/
+#   Stage 3 (production): Final image with baked /data/, Manticore
+#                         (serving from /data/gold in read-only intent)
+#                         + Gradio dashboard on port 8080
+#
+# Build with:
+#   docker build -f Dockerfile.cloudrun -t eva-cloud-run .
+#
+# Run locally:
+#   docker run -p 8080:8080 eva-cloud-run
+# ==============================================================
+
+
+# ==============================================================
+# Stage 0 — raw: Download VCF from NCBI FTP
+# ==============================================================
+FROM python:3.11-slim AS raw
+
+RUN apt-get update && \
+    apt-get install -y curl bcftools && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /data/raw && \
+    curl -s https://ftp.ncbi.nih.gov/snp/population_frequency/latest_release/freq.vcf.gz | \
+    bcftools view | head -n 1000100 | bcftools view -Oz -o /data/raw/freq-subset.vcf.gz
+
+
+# ==============================================================
+# Stage 1 — silver: Transform VCF → population frequency TSV
+# ==============================================================
+FROM python:3.11-slim AS silver
+
+RUN apt-get update && \
+    apt-get install -y bcftools && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=raw /data/raw /data/raw
+
+COPY build-silver.sh /build-silver.sh
+RUN chmod +x /build-silver.sh && /build-silver.sh
+
+
+# ==============================================================
+# Stage 2 — gold: Load TSV into Manticore → bake index files
+# ==============================================================
+FROM manticoresearch/manticore:latest AS gold
+
+RUN apt-get update && \
+    apt-get install -y python3 python3-pip python3-venv curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Python virtual environment
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# Install ETL Python dependencies
+COPY etl-pipeline/requirements.txt /tmp/etl-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/etl-requirements.txt
+
+# Copy Silver TSV and loader script
+COPY --from=silver /data/silver /data/silver
+COPY etl-pipeline/assets/load_to_manticore.py /tmp/load_to_manticore.py
+
+# Run build-time gold loading:
+# Starts Manticore, creates schema, bulk-loads data, stops Manticore.
+# Result: /data/gold/ contains the baked Manticore index files.
+COPY build-gold.sh /build-gold.sh
+RUN chmod +x /build-gold.sh && /build-gold.sh
+
+
+# ==============================================================
+# Stage 3 — production: Final Cloud Run image
+# All three /data layers are baked into the image.
+# Manticore uses /data/gold (read-only by intent) at runtime.
+# Operational files (pid, logs, binlog) are redirected to /tmp.
+# ==============================================================
+FROM manticoresearch/manticore:latest AS production
+
+RUN apt-get update && \
+    apt-get install -y python3 python3-pip python3-venv curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Python virtual environment
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# Bake all data layers into the image
+COPY --from=raw    /data/raw    /data/raw
+COPY --from=silver /data/silver /data/silver
+COPY --from=gold   /data/gold   /data/gold
+
+# Production Manticore config:
+#   data_dir  → /data/gold  (baked-in index files, read-only by intent)
+#   pid/logs  → /var/run & /var/log (created by entrypoint at startup)
+#   binlog    → /tmp (ephemeral; lost on container restart, safe for read-only use)
+RUN printf 'searchd {\n\
+  listen = 0.0.0.0:9306:mysql\n\
+  listen = 0.0.0.0:9308:http\n\
+  pid_file = /var/run/manticore/searchd.pid\n\
+  data_dir = /data/gold\n\
+  log = /var/log/manticore/searchd.log\n\
+  query_log = /var/log/manticore/query.log\n\
+  binlog_path = /tmp/manticore-binlog\n\
+}\n' > /etc/manticoresearch/manticore.conf
+
+# Install Gradio dashboard
+WORKDIR /app
+COPY dashboard/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY dashboard/ .
+
+# Production entrypoint
+COPY deploy-entrypoint.sh /deploy-entrypoint.sh
+RUN chmod +x /deploy-entrypoint.sh
+
+# Cloud Run uses the PORT environment variable (default 8080)
+ENV PORT=8080
+EXPOSE ${PORT}
+
+ENTRYPOINT ["/deploy-entrypoint.sh"]

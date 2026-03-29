@@ -12,23 +12,41 @@ import time
 
 def materialize():
     print("Loading extracted TSV data into Manticore Search DWH...")
-    tsv_path = '/data/variantes_poblaciones.tsv'
-    
+    tsv_path = '/data/silver/variantes_poblaciones.tsv'
+
     if not os.path.exists(tsv_path):
         raise FileNotFoundError(f"Missing {tsv_path}. Did the ingestion step run?")
         
-    df = pd.read_csv(tsv_path, sep='\t')
+    df = pd.read_csv(
+        tsv_path,
+        sep='\t',
+        on_bad_lines='skip',   # skip multi-allelic rows with variable column counts
+        engine='python'        # required for on_bad_lines support
+    )
     
     # Missing values should be converted to 0.0 or handled
     df = df.replace("NULL", 0.0)
     df = df.fillna(0.0)
     
-    # Mapping ALFA project columns to expected db schema:
-    # SAMN10492695 -> afr_freq
-    # SAMN10492698 -> eur_freq
-    # SAMN10492696 -> amr_freq
-    
     MANTICORE_URL = os.getenv("MANTICORE_URL", "http://search-engine:9308")
+    
+    # 1. Drop and Recreate Table to match all 12 ALFA populations
+    print("Recreating Manticore table to accommodate 12 populations...")
+    sql_url = f"{MANTICORE_URL}/sql?mode=raw"
+    
+    # Drop existing table
+    resp_drop = requests.post(sql_url, data="query=DROP TABLE IF EXISTS eva_variants")
+    if resp_drop.status_code != 200:
+        raise RuntimeError(f"Failed to drop old schema: {resp_drop.text}")
+    
+    # Create new table (single-line SQL, form-encoded body)
+    create_sql = "CREATE TABLE eva_variants (variant_id text, pos integer, ref string, alt string, afr_freq float, amr_freq float, eas_freq float, eur_freq float, sas_freq float, aj_freq float, fipa_freq float, cau_freq float, oth_freq float, apl_freq float, asn_freq float, amr_cau_freq float)"
+    
+    resp_create = requests.post(sql_url, data=f"query={create_sql}")
+    if resp_create.status_code != 200:
+        raise RuntimeError(f"Failed to create schema: {resp_create.text}")
+    else:
+        print("Schema successfully created/verified.")
     
     bulk_data = []
     # Drop rows without an ID or where ID is .
@@ -48,9 +66,18 @@ def materialize():
                     "pos": int(row["pos"]),
                     "ref": str(row["ref"]),
                     "alt": str(row["alt"]),
-                    "eur_freq": float(row.get("SAMN10492698", 0.0)),
                     "afr_freq": float(row.get("SAMN10492695", 0.0)),
-                    "amr_freq": float(row.get("SAMN10492696", 0.0))
+                    "amr_freq": float(row.get("SAMN10492696", 0.0)),
+                    "eas_freq": float(row.get("SAMN10492697", 0.0)),
+                    "eur_freq": float(row.get("SAMN10492698", 0.0)),
+                    "sas_freq": float(row.get("SAMN10492699", 0.0)),
+                    "aj_freq": float(row.get("SAMN10492700", 0.0)),
+                    "fipa_freq": float(row.get("SAMN10492701", 0.0)),
+                    "cau_freq": float(row.get("SAMN10492702", 0.0)),
+                    "oth_freq": float(row.get("SAMN11605645", 0.0)),
+                    "apl_freq": float(row.get("SAMN10492703", 0.0)),
+                    "asn_freq": float(row.get("SAMN10492704", 0.0)),
+                    "amr_cau_freq": float(row.get("SAMN10492705", 0.0))
                 }
             }
         }
@@ -84,3 +111,5 @@ def materialize():
             
     print("Loading Task Complete.")
     return pd.DataFrame([{"status": "load_complete"}])
+
+materialize()

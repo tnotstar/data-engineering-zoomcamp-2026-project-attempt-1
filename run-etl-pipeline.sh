@@ -1,2 +1,2 @@
 #!/bin/bash
-docker compose run --rm etl-pipeline bruin run /pipeline
+docker compose exec etl-pipeline bruin run --force /pipeline

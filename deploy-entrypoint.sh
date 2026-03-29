@@ -1,14 +1,22 @@
 #!/bin/bash
+# =============================================================
+# Production entrypoint for Google Cloud Run
+# Data is pre-baked in /data/gold (Manticore index files)
+# Operational files (pid, logs, binlog) go to /tmp (ephemeral)
+# =============================================================
 set -e
 
-# Change ownership of manticore directories if running as root
+# Create writable operational directories in /tmp (ephemeral, lost on restart)
+mkdir -p /tmp/manticore-binlog /var/log/manticore /var/run/manticore
+
+# Fix ownership for writable operational dirs only (NOT /data/gold — it's baked in)
 if [ "$(id -u)" = '0' ]; then
-    mkdir -p /var/log/manticore /var/run/manticore /var/lib/manticore
-    chown -R manticore:manticore /var/lib/manticore /var/log/manticore /var/run/manticore /etc/manticoresearch
+    chown manticore:manticore /var/log/manticore /var/run/manticore /tmp/manticore-binlog
 fi
 
-# Start Manticore search tightly coupled in the background
-echo "Starting search-engine (Manticore) in the background..."
+# Start Manticore in the background
+# Config points data_dir to /data/gold (read-only by intent)
+echo "Starting search-engine (Manticore) from baked index in /data/gold..."
 
 if [ "$(id -u)" = '0' ]; then
     gosu manticore searchd --nodetach &
@@ -16,14 +24,14 @@ else
     searchd --nodetach &
 fi
 
-# Wait for Manticore to be ready (internal port 9308)
+# Wait for Manticore to be ready
 echo "Waiting for search-engine on port 9308..."
-while ! curl -s http://127.0.0.1:9308/ >/dev/null; do
+while ! curl -s http://127.0.0.1:9308/ > /dev/null 2>&1; do
     sleep 1
 done
 echo "search-engine is up!"
 
-# Start the dashboard
+# Start the Gradio Dashboard
 echo "Starting Dashboard on port ${PORT:-8080}..."
 export GRADIO_SERVER_PORT=${PORT:-8080}
 export GRADIO_SERVER_NAME="0.0.0.0"
