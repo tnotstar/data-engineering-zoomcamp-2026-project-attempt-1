@@ -1,3 +1,6 @@
 connections:
-  duckdb:
-    type: duckdb
+  manticore:
+    type: mysql
+    port: 9306
+    user: root
+    database: Manticore

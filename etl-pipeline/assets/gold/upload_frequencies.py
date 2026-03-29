@@ -1,7 +1,7 @@
 """@bruin
-name: main.load_to_manticore
+name: gold.upload_frequencies
 depends:
-  - main.ingest_eva
+  - silver.calculate_frequencies
 @bruin"""
 
 import pandas as pd
@@ -35,14 +35,14 @@ def materialize():
     sql_url = f"{MANTICORE_URL}/sql?mode=raw"
     
     # Drop existing table
-    resp_drop = requests.post(sql_url, data="query=DROP TABLE IF EXISTS eva_variants")
+    resp_drop = requests.post(sql_url, data={"query": "DROP TABLE IF EXISTS eva_variants"})
     if resp_drop.status_code != 200:
         raise RuntimeError(f"Failed to drop old schema: {resp_drop.text}")
     
-    # Create new table (single-line SQL, form-encoded body)
-    create_sql = "CREATE TABLE eva_variants (variant_id text, pos integer, ref string, alt string, afr_freq float, amr_freq float, eas_freq float, eur_freq float, sas_freq float, aj_freq float, fipa_freq float, cau_freq float, oth_freq float, apl_freq float, asn_freq float, amr_cau_freq float)"
+    # Create new table (single-line SQL, form-encoded body, enable infix search)
+    create_sql = "CREATE TABLE eva_variants (variant_id text, chrom string, pos integer, ref string, alt string, afr_freq float, amr_freq float, eas_freq float, eur_freq float, sas_freq float, aj_freq float, fipa_freq float, cau_freq float, oth_freq float, apl_freq float, asn_freq float, amr_cau_freq float) min_infix_len='1'"
     
-    resp_create = requests.post(sql_url, data=f"query={create_sql}")
+    resp_create = requests.post(sql_url, data={"query": create_sql})
     if resp_create.status_code != 200:
         raise RuntimeError(f"Failed to create schema: {resp_create.text}")
     else:
@@ -63,6 +63,7 @@ def materialize():
                 "id": i + 1,
                 "doc": {
                     "variant_id": str(row["variant_id"]),
+                    "chrom": str(row["chrom"]),
                     "pos": int(row["pos"]),
                     "ref": str(row["ref"]),
                     "alt": str(row["alt"]),

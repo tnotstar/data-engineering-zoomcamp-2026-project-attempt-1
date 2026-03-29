@@ -6,14 +6,14 @@ services:
       - "9306:9306"
       - "9308:9308"
     volumes:
-      - ./data:/data
+      - ./data/gold:/data
       - ./search-engine/setup.sql:/docker-entrypoint-initdb.d/setup.sql
     restart: always
 
   dashboard:
     build: 
       context: ./dashboard
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.gradio
     container_name: dashboard
     ports:
       - "7860:7860"

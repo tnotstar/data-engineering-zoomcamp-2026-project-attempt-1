@@ -208,3 +208,7 @@ __marimo__/
 
 # Bruin
 .bruin.yml
+
+# Data
+data/*
+!data/gold/*

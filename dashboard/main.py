@@ -86,7 +86,7 @@ def get_chromosome_distribution():
         # Get up to 5000 records to show density
         search_request = {
             'table': 'eva_variants',
-            'limit': 5000,
+            'limit': 1000,
             '_source': ['pos']
         }
         response = search_api.search(search_request)
@@ -102,7 +102,12 @@ def get_chromosome_distribution():
 
         df = pd.DataFrame({'Position': positions})
         fig = px.histogram(df, x='Position', nbins=50,
-                           title="Distribution of Variants across Chromosome segment")
+                           title="Distribution of Variants across Chromosome segment",
+                           template="plotly_dark")
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
         return fig
     except Exception as e:
         print(f"Error getting distribution: {e}")
@@ -115,7 +120,7 @@ def get_sample_variants():
         # Query multiple variants to find ones with good frequency data
         search_request = {
             'table': 'eva_variants',
-            'limit': 1000,
+            'limit': 100,
             '_source': ['variant_id', 'afr_freq', 'amr_freq', 'eas_freq', 'eur_freq', 'sas_freq', 'aj_freq', 'fipa_freq', 'cau_freq', 'oth_freq', 'apl_freq', 'asn_freq', 'amr_cau_freq']
         }
         response = search_api.search(search_request)
@@ -124,24 +129,25 @@ def get_sample_variants():
         if not hits:
             return []
 
-        # Score variants by total population frequency data (count of non-zero frequencies)
+        # Calculate total frequency across all 12 populations for sorting
         variant_scores = []
+        freq_keys = ['afr_freq', 'amr_freq', 'eas_freq', 'eur_freq', 'sas_freq', 'aj_freq', 'fipa_freq', 'cau_freq', 'oth_freq', 'apl_freq', 'asn_freq', 'amr_cau_freq']
+        
         for hit in hits:
             if not hit.source:
                 continue
             data = hit.source
-            # Count non-zero frequencies
-            non_zero_count = sum(1 for key in ['afr_freq', 'amr_freq', 'eas_freq', 'eur_freq', 'sas_freq', 'aj_freq', 'fipa_freq', 'cau_freq', 'oth_freq', 'apl_freq', 'asn_freq', 'amr_cau_freq']
-                               if data.get(key, 0) and data.get(key, 0) > 0)
+            # Sum of all non-null frequencies
+            total_freq = sum(data.get(key, 0) or 0 for key in freq_keys)
+            
             variant_scores.append({
                 'variant_id': data.get('variant_id', ''),
-                'score': non_zero_count,
-                'data': data
+                'score': total_freq
             })
 
-        # Sort by score (descending) and take top 10
+        # Sort by total frequency (descending) and take top 10
         variant_scores.sort(key=lambda x: x['score'], reverse=True)
-        top_variants = [v['variant_id'] for v in variant_scores[:10]]
+        top_variants = [v['variant_id'] for v in variant_scores[:10] if v['variant_id']]
 
         return top_variants
     except Exception as e:
@@ -151,145 +157,179 @@ def get_sample_variants():
 def show_examples():
     try:
         sample_variants = get_sample_variants()
-        return gr.Dropdown(
-            label="Select Sample Variant",
-            choices=sample_variants,
-            value=sample_variants[0] if sample_variants else None,
-            allow_custom_value=True,
-            interactive=True
+        first_val = sample_variants[0] if sample_variants else None
+        
+        return (
+            gr.update(
+                choices=sample_variants,
+                value=first_val,
+                visible=True
+            ),
+            gr.update(value=first_val) # Update searchbox as well
         )
     except Exception as e:
-        return gr.Dropdown(
-            label="Select Sample Variant",
-            choices=[],
-            value=None,
-            allow_custom_value=True,
-            interactive=True
+        print(f"Error in show_examples: {e}")
+        return gr.Dropdown(choices=[], value=None, visible=False), gr.update()
+
+def format_variant_info_as_list(data):
+    """Formats variant dictionary into a list of [Field, Value] for Gr.Dataframe"""
+    if not data:
+        return [["Field", "Value"]]
+
+    # Round frequencies
+    freq_keys = ['afr_freq', 'amr_freq', 'eas_freq', 'eur_freq', 'sas_freq', 'aj_freq', 'fipa_freq', 'cau_freq', 'oth_freq', 'apl_freq', 'asn_freq', 'amr_cau_freq']
+    
+    info_list = [
+        ["Variant ID", data.get('variant_id', '-')],
+        ["Chromosome", data.get('chrom', '-')],
+        ["Position", str(data.get('pos', '-'))],
+        ["Reference", data.get('ref', '-')],
+        ["Alternate", data.get('alt', '-')],
+    ]
+    
+    # Add population frequencies
+    for key in freq_keys:
+        label = key.replace('_freq', '').upper()
+        val = data.get(key, 0)
+        info_list.append([f"{label} Frequency", f"{val:.6f}" if val is not None else "0.000000"])
+        
+    return info_list
+
+def search_and_format_variant(variant_id):
+    """Atomic function to search and format variant info for UI to reduce latency"""
+    if not variant_id:
+        return None, [["Field", "Value"]], "No ID provided."
+    
+    try:
+        search_api = get_manticore_client()
+        search_request = {
+            'table': 'eva_variants',
+            'query': {
+                'match': {'variant_id': f"*{variant_id}*"}
+            }
+        }
+        response = search_api.search(search_request)
+        hits = response.hits.hits if response.hits else []
+
+        if not hits:
+            return None, [["Field", "Value"]], f"Variant {variant_id} not found."
+
+        data = hits[0].source
+
+        # 1. Bar Chart Data
+        freq_keys = ['afr_freq', 'amr_freq', 'eas_freq', 'eur_freq', 'sas_freq', 'aj_freq', 'fipa_freq', 'cau_freq', 'oth_freq', 'apl_freq', 'asn_freq', 'amr_cau_freq']
+        freq_data = {
+            'Population': [k.replace('_freq', '').upper() for k in freq_keys],
+            'Frequency': [data.get(k, 0) or 0 for k in freq_keys]
+        }
+        df = pd.DataFrame(freq_data)
+        fig = px.bar(df, x='Population', y='Frequency',
+                     title=f"Population Frequencies for {variant_id}",
+                     color='Population',
+                     template="plotly_dark")
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
         )
 
-def format_variant_info(variant_info):
-    if not variant_info:
-        return {
-            'variant_id': '-',
-            'chrom': '-',
-            'pos': '-',
-            'ref': '-',
-            'alt': '-',
-            'afr_freq': '-',
-            'amr_freq': '-',
-            'eas_freq': '-',
-            'eur_freq': '-',
-            'sas_freq': '-',
-            'aj_freq': '-',
-            'fipa_freq': '-',
-            'cau_freq': '-',
-            'oth_freq': '-',
-            'apl_freq': '-',
-            'asn_freq': '-',
-            'amr_cau_freq': '-'
-        }
+        # 2. Table Data (List of Lists)
+        info_table = format_variant_info_as_list(data)
 
-    return {
-        'variant_id': variant_info.get('variant_id', '-'),
-        'chrom': variant_info.get('chrom', '-'),
-        'pos': str(variant_info.get('pos', '-')),
-        'ref': variant_info.get('ref', '-'),
-        'alt': variant_info.get('alt', '-'),
-        'afr_freq': f"{variant_info.get('afr_freq', 0):.6f}",
-        'amr_freq': f"{variant_info.get('amr_freq', 0):.6f}",
-        'eas_freq': f"{variant_info.get('eas_freq', 0):.6f}",
-        'eur_freq': f"{variant_info.get('eur_freq', 0):.6f}",
-        'sas_freq': f"{variant_info.get('sas_freq', 0):.6f}",
-        'aj_freq': f"{variant_info.get('aj_freq', 0):.6f}",
-        'fipa_freq': f"{variant_info.get('fipa_freq', 0):.6f}",
-        'cau_freq': f"{variant_info.get('cau_freq', 0):.6f}",
-        'oth_freq': f"{variant_info.get('oth_freq', 0):.6f}",
-        'apl_freq': f"{variant_info.get('apl_freq', 0):.6f}",
-        'asn_freq': f"{variant_info.get('asn_freq', 0):.6f}",
-        'amr_cau_freq': f"{variant_info.get('amr_cau_freq', 0):.6f}"
-    }
+        return fig, info_table, f"Showing results for {variant_id}"
+    except Exception as e:
+        print(f"Error searching variant: {e}")
+        return None, [["Field", "Value"]], f"Error: {str(e)}"
 
-# Gradio Interface
-with gr.Blocks(title="EVA Population Frequencies") as app:
-    gr.Markdown("# Genomic Population Frequency Insights")
-    gr.Markdown("Search for an NCBI variant ID to see its population distributions, and view regional density across the loaded ALFA project chromosome.")
+# Gradio Interface - Premium Redesign
+with gr.Blocks(
+    title="EVA Population Frequencies"
+) as app:
+    with gr.Column():
+        gr.Markdown("# Genomic Population Frequency Insights")
+        gr.Markdown("Search for an NCBI variant ID to see its population distributions, and view regional density across the loaded ALFA project chromosome.")
 
-    # Hide dropdown initially
-    var_dropdown = gr.Dropdown(
-        label="Select Sample Variant",
-        choices=[],
-        value=None,
-        allow_custom_value=True,
-        interactive=True,
-        visible=False
-    )
+        # Row 1: Search Section
+        with gr.Row(variant="panel"):
+            with gr.Column(scale=8):
+                gr.Markdown("### Search")
+                var_id_input = gr.Textbox(
+                    label="Variant ID", 
+                    placeholder="rs...", 
+                    show_label=True,
+                    container=True
+                )
+                # Nest dropdown here so it appears in the right place
+                var_dropdown = gr.Dropdown(
+                    label="Select Sample Variant",
+                    choices=[],
+                    value=None,
+                    allow_custom_value=True,
+                    interactive=True,
+                    visible=False
+                )
+            with gr.Column(scale=1, min_width=150):
+                gr.Markdown("<br>", visible=True) # Spacer
+                search_btn = gr.Button("Search", variant="primary")
+                examples_btn = gr.Button("Examples", variant="secondary")
 
-    with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("### Search")
-            var_id_input = gr.Textbox(label="Variant ID", placeholder="rs...")
-            search_btn = gr.Button("Search", variant="primary")
-            examples_btn = gr.Button("Examples", variant="secondary")
+        # Row 2: Information & Categorical Chart
+        with gr.Row():
+            with gr.Column(scale=1):
+                gr.Markdown("### Variant Information")
+                gr.Markdown("Variant Details")
+                variant_info = gr.Dataframe(
+                    headers=["Field", "Value"],
+                    value=[],
+                    interactive=False,
+                    wrap=True
+                )
+            with gr.Column(scale=1):
+                gr.Markdown("### Categorical Frequencies")
+                bar_chart = gr.Plot(show_label=False)
 
-        with gr.Column(scale=1):
-            gr.Markdown("### Variant Information")
-            variant_info = gr.Dataframe(
-                label="Variant Details",
-                headers=["Field", "Value"],
-                value=[],
-                interactive=False,
-                wrap=True
-            )
+        # Row 3: Chromosome Distribution (Full Width)
+        with gr.Row():
+            with gr.Column(scale=1):
+                gr.Markdown("### Chromosome Distribution")
+                density_plot = gr.Plot(show_label=False)
 
-    with gr.Row():
-        with gr.Column(scale=1):
-            bar_chart = gr.Plot(label="Categorical Frequencies")
-        with gr.Column(scale=1):
-            density_plot = gr.Plot(label="Chromosome Distribution")
-
-    with gr.Row():
-        refresh_btn = gr.Button("Refresh Density Plot")
+        # Row 4: Action Button
+        with gr.Row():
+            refresh_btn = gr.Button("Refresh Density Plot", variant="secondary")
 
     # Connect events
     search_btn.click(
-        fn=lambda vid: (var_dropdown.update(value=vid, visible=True), None, None),
+        fn=lambda vid: (gr.update(value=vid, visible=False), None, None),
         inputs=var_id_input,
         outputs=[var_dropdown, bar_chart, variant_info]
     ).then(
-        fn=search_variant,
-        inputs=var_dropdown,
+        fn=search_and_format_variant,
+        inputs=var_id_input,
         outputs=[bar_chart, variant_info, gr.Textbox(visible=False)]
-    ).then(
-        fn=format_variant_info,
-        inputs=variant_info,
-        outputs=variant_info
     )
 
     var_dropdown.change(
-        fn=search_variant,
+        fn=search_and_format_variant,
         inputs=var_dropdown,
         outputs=[bar_chart, variant_info, gr.Textbox(visible=False)]
-    ).then(
-        fn=format_variant_info,
-        inputs=variant_info,
-        outputs=variant_info
     )
 
     examples_btn.click(
         fn=show_examples,
         inputs=[],
-        outputs=var_dropdown
+        outputs=[var_dropdown, var_id_input]
     ).then(
-        fn=search_variant,
+        fn=search_and_format_variant,
         inputs=var_dropdown,
         outputs=[bar_chart, variant_info, gr.Textbox(visible=False)]
-    ).then(
-        fn=format_variant_info,
-        inputs=variant_info,
-        outputs=variant_info
     )
 
     refresh_btn.click(fn=get_chromosome_distribution, inputs=[], outputs=density_plot)
 
 if __name__ == "__main__":
-    app.launch(server_name="0.0.0.0", server_port=7860, share=False)
+    app.launch(
+        server_name="0.0.0.0", 
+        server_port=7860, 
+        share=False,
+        theme=gr.themes.Soft(primary_hue="orange", neutral_hue="slate")
+    )

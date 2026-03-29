@@ -1,5 +1,7 @@
 """@bruin
-name: main.ingest_eva
+name: silver.calculate_frequencies
+depends:
+  - raw.download_frequencies
 @bruin"""
 
 import subprocess
@@ -13,17 +15,17 @@ def materialize():
     os.makedirs('/data/raw', exist_ok=True)
     raw_path = '/data/raw/freq-subset.vcf.gz'
 
+    if not os.path.exists(raw_path):
+        raise FileNotFoundError(f"Missing {raw_path}. Did the raw layer run?")
+
     # --- SILVER LAYER: /data/silver ---
     os.makedirs('/data/silver', exist_ok=True)
     silver_path = '/data/silver/variantes_poblaciones.tsv'
 
     bash_script = f"""
-    curl -s https://ftp.ncbi.nih.gov/snp/population_frequency/latest_release/freq.vcf.gz | \\
-    bcftools view | head -n 1000100 | bcftools view -Oz -o {raw_path}
-
     # Generate samples header
     samples=$(bcftools query -l {raw_path} | tr '\\n' '\\t')
-    echo -e "variant_id\\tCHROM\\tpos\\tref\\talt\\t$samples" > {silver_path}
+    echo -e "variant_id\\tchrom\\tpos\\tref\\talt\\t$samples" > {silver_path}
 
     # Extract AC and AN recursively and compute frequencies using awk
     bcftools query -f '%ID\\t%CHROM\\t%POS\\t%REF\\t%ALT[\\t%AC\\t%AN]\\n' {raw_path} | \\
@@ -50,6 +52,6 @@ def materialize():
     print(f"Raw data saved to {raw_path}")
     print(f"Silver data saved to {silver_path}")
 
-    return pd.DataFrame([{"status": "ingest_complete"}])
+    return pd.DataFrame([{"status": "calculate_frequencies_complete"}])
 
 materialize()

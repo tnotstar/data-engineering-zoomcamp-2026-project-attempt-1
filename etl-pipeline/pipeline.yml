@@ -1,1 +1,9 @@
-name: eva_project
+name: "eva_project"
+
+schedule: "daily"
+start_date: "2026-03-30"
+
+variables:
+  number_of_variants:
+    type: "int"
+    default: 100000
