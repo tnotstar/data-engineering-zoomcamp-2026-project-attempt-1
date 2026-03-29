@@ -157,19 +157,38 @@ def get_sample_variants():
 def show_examples():
     try:
         sample_variants = get_sample_variants()
-        first_val = sample_variants[0] if sample_variants else None
-        
-        return (
-            gr.update(
-                choices=sample_variants,
-                value=first_val,
-                visible=True
-            ),
-            gr.update(value=first_val) # Update searchbox as well
+        # Return only the updated dropdown, don't auto-update searchbox here anymore
+        return gr.update(
+            choices=sample_variants,
+            value=None,
+            visible=True
         )
     except Exception as e:
         print(f"Error in show_examples: {e}")
-        return gr.Dropdown(choices=[], value=None, visible=False), gr.update()
+        return gr.update(choices=[], value=None, visible=False)
+
+def append_variant_to_search(current_text, new_variant):
+    """Appends a new variant ID to the existing search string, comma-separated."""
+    if not new_variant:
+        return current_text
+    if not current_text:
+        return new_variant
+    
+    # Split, clean and avoid duplicates
+    existing = [v.strip() for v in current_text.split(',') if v.strip()]
+    if new_variant not in existing:
+        existing.append(new_variant)
+    
+    return ",".join(existing)
+
+def clear_search():
+    """Resets the search box and results."""
+    return (
+        gr.update(value=""),      # var_id_input
+        gr.update(visible=False), # var_dropdown
+        None,                    # bar_chart
+        []                       # variant_info
+    )
 
 def format_variant_info_as_list(data):
     """Formats variant dictionary into a list of [Field, Value] for Gr.Dataframe"""
@@ -202,29 +221,38 @@ def search_and_format_variant(variant_id):
     
     try:
         search_api = get_manticore_client()
+        # Handle multi-variant search list
+        if "," in variant_id:
+            ids = [f"({v.strip()})" for v in variant_id.split(',') if v.strip()]
+            search_query = " | ".join(ids)
+        else:
+            search_query = f"*{variant_id}*"
+
         search_request = {
             'table': 'eva_variants',
             'query': {
-                'match': {'variant_id': f"*{variant_id}*"}
-            }
+                'match': {'variant_id': search_query}
+            },
+            'limit': 10
         }
         response = search_api.search(search_request)
         hits = response.hits.hits if response.hits else []
 
         if not hits:
-            return None, [["Field", "Value"]], f"Variant {variant_id} not found."
+            return None, [], f"Variant {variant_id} not found."
 
-        data = hits[0].source
-
-        # 1. Bar Chart Data
+        # Use the first hit for the Chart as representative (top match)
+        top_hit = hits[0].source
+        
+        # 1. Bar Chart Data (Top Hit only)
         freq_keys = ['afr_freq', 'amr_freq', 'eas_freq', 'eur_freq', 'sas_freq', 'aj_freq', 'fipa_freq', 'cau_freq', 'oth_freq', 'apl_freq', 'asn_freq', 'amr_cau_freq']
         freq_data = {
             'Population': [k.replace('_freq', '').upper() for k in freq_keys],
-            'Frequency': [data.get(k, 0) or 0 for k in freq_keys]
+            'Frequency': [top_hit.get(k, 0) or 0 for k in freq_keys]
         }
         df = pd.DataFrame(freq_data)
         fig = px.bar(df, x='Population', y='Frequency',
-                     title=f"Population Frequencies for {variant_id}",
+                     title=f"Top Match Frequencies: {top_hit.get('variant_id')}",
                      color='Population',
                      template="plotly_dark")
         fig.update_layout(
@@ -232,13 +260,18 @@ def search_and_format_variant(variant_id):
             plot_bgcolor='rgba(0,0,0,0)'
         )
 
-        # 2. Table Data (List of Lists)
-        info_table = format_variant_info_as_list(data)
-
-        return fig, info_table, f"Showing results for {variant_id}"
+        # 2. Transposed Table Data (All Hits)
+        columns = ['variant_id', 'chrom', 'pos', 'ref', 'alt'] + freq_keys
+        table_rows = []
+        for h in hits:
+            d = h.source
+            row = [d.get(c, "-") for c in columns]
+            table_rows.append(row)
+        
+        return fig, table_rows, f"Found {len(hits)} variants matching {variant_id}"
     except Exception as e:
         print(f"Error searching variant: {e}")
-        return None, [["Field", "Value"]], f"Error: {str(e)}"
+        return None, [], f"Error: {str(e)}"
 
 # Gradio Interface - Premium Redesign
 with gr.Blocks(
@@ -271,17 +304,18 @@ with gr.Blocks(
                 gr.Markdown("<br>", visible=True) # Spacer
                 search_btn = gr.Button("Search", variant="primary")
                 examples_btn = gr.Button("Examples", variant="secondary")
+                clear_btn = gr.Button("Clear", variant="secondary")
 
         # Row 2: Information & Categorical Chart
         with gr.Row():
             with gr.Column(scale=1):
                 gr.Markdown("### Variant Information")
-                gr.Markdown("Variant Details")
+                gr.Markdown("Variant Details (ID, Chrom, Pos, Ref, Alt + 12 Population Frequencies)")
                 variant_info = gr.Dataframe(
-                    headers=["Field", "Value"],
+                    headers=['ID', 'CHR', 'POS', 'REF', 'ALT', 'AFR', 'AMR', 'EAS', 'EUR', 'SAS', 'AJ', 'FIPA', 'CAU', 'OTH', 'APL', 'ASN', 'AMR_CAU'],
                     value=[],
                     interactive=False,
-                    wrap=True
+                    wrap=False # Horizontal scroll is better for wide table
                 )
             with gr.Column(scale=1):
                 gr.Markdown("### Categorical Frequencies")
@@ -299,7 +333,7 @@ with gr.Blocks(
 
     # Connect events
     search_btn.click(
-        fn=lambda vid: (gr.update(value=vid, visible=False), None, None),
+        fn=lambda vid: (gr.update(visible=False), None, None),
         inputs=var_id_input,
         outputs=[var_dropdown, bar_chart, variant_info]
     ).then(
@@ -309,19 +343,25 @@ with gr.Blocks(
     )
 
     var_dropdown.change(
+        fn=append_variant_to_search,
+        inputs=[var_id_input, var_dropdown],
+        outputs=var_id_input
+    ).then(
         fn=search_and_format_variant,
-        inputs=var_dropdown,
+        inputs=var_id_input,
         outputs=[bar_chart, variant_info, gr.Textbox(visible=False)]
     )
 
     examples_btn.click(
         fn=show_examples,
         inputs=[],
-        outputs=[var_dropdown, var_id_input]
-    ).then(
-        fn=search_and_format_variant,
-        inputs=var_dropdown,
-        outputs=[bar_chart, variant_info, gr.Textbox(visible=False)]
+        outputs=var_dropdown
+    )
+
+    clear_btn.click(
+        fn=clear_search,
+        inputs=[],
+        outputs=[var_id_input, var_dropdown, bar_chart, variant_info]
     )
 
     refresh_btn.click(fn=get_chromosome_distribution, inputs=[], outputs=density_plot)
