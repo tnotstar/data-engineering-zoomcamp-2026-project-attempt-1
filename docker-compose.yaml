@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  manticore:
+    image: manticoresearch/manticore:latest
+    container_name: manticore
+    ports:
+      - "9306:9306"
+      - "9308:9308"
+    volumes:
+      - ./data:/data
+      - ./manticore/setup.sql:/docker-entrypoint-initdb.d/setup.sql
+    restart: always
+
+  gradio:
+    build: 
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: gradio
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./app:/app
+    environment:
+      - MANTICORE_URL=http://manticore:9308
+    depends_on:
+      - manticore
+    restart: always
+
+  bruin:
+    build:
+      context: ./pipeline
+      dockerfile: Dockerfile.bruin
+    container_name: bruin
+    volumes:
+      - ./pipeline:/pipeline
+      - ./data:/data
+    environment:
+      - MANTICORE_URL=http://manticore:9308
+    command: sleep infinity
+    depends_on:
+      - manticore

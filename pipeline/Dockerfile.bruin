@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+# Install dependencies and Bruin CLI
+RUN apt-get update && apt-get install -y curl bash tar && \
+    curl -sL https://github.com/bruin-data/bruin/releases/latest/download/bruin_Linux_x86_64.tar.gz | tar -xz && \
+    mv bruin /usr/local/bin/bruin && \
+    chmod +x /usr/local/bin/bruin
+
+WORKDIR /pipeline
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+CMD ["sleep", "infinity"]
