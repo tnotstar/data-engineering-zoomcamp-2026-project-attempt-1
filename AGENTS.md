@@ -12,7 +12,7 @@ This project implements an end-to-end data engineering pipeline for ingesting, p
 
 ### 1. EVA Ingestion Agent
 
-**Location**: `pipeline/assets/ingest_eva.py`
+**Location**: `etl-pipeline/assets/ingest_eva.py`
 
 **Purpose**: Simulates data ingestion from the European Variation Archive FTP server and generates synthetic genomic variant data focused on Chromosome 21.
 
@@ -43,7 +43,7 @@ This project implements an end-to-end data engineering pipeline for ingesting, p
 
 ### 2. Manticore Loading Agent
 
-**Location**: `pipeline/assets/load_to_manticore.py`
+**Location**: `etl-pipeline/assets/load_to_manticore.py`
 
 **Purpose**: Bulk loads the filtered variant data from CSV into Manticore Search engine for fast querying and indexing.
 
@@ -67,9 +67,9 @@ This project implements an end-to-end data engineering pipeline for ingesting, p
 
 ---
 
-### 3. Manticore Search Agent
+### 3. Search Engine Agent
 
-**Location**: Docker service in `docker-compose.yaml`
+**Location**: Docker service `search-engine` in `docker-compose.yaml`
 
 **Purpose**: Acts as the data warehouse and search engine, providing fast full-text search and structured querying capabilities for genomic variants.
 
@@ -95,9 +95,9 @@ This project implements an end-to-end data engineering pipeline for ingesting, p
 
 ---
 
-### 4. Gradio Web Interface Agent
+### 4. Dashboard Agent
 
-**Location**: `app/main.py`
+**Location**: `dashboard/main.py`
 
 **Purpose**: Provides a user-friendly web interface for searching and visualizing genomic variant data stored in Manticore.
 
@@ -139,11 +139,11 @@ This project implements an end-to-end data engineering pipeline for ingesting, p
 
 ### Bruin Pipeline Engine
 
-**Location**: `pipeline/` directory
+**Location**: `etl-pipeline/` directory
 
 **Purpose**: Orchestrates the ETL workflow, managing dependencies between agents.
 
-**Pipeline Definition**: `pipeline/pipeline.yml`
+**Pipeline Definition**: `etl-pipeline/pipeline.yml`
 
 **DAG Structure**:
 ```
@@ -160,7 +160,7 @@ ingest_eva → load_to_manticore
 3. Web interface becomes available for querying
 
 **Environment Configuration**:
-- Default environment: `pipeline/environments/default.yml`
+- Default environment: `etl-pipeline/environments/default.yml`
 - DuckDB connection for intermediate storage
 - Supports multiple deployment environments
 
@@ -194,18 +194,18 @@ EVA Ingestion → CSV File → Manticore Loading Agent → Manticore Search
 **Purpose**: Manages all services as containers with proper networking and volume sharing.
 
 **Services**:
-- `manticore`: Search engine and data warehouse
-- `gradio`: Web interface
-- `bruin`: Pipeline orchestration environment
+- `search-engine`: Search engine and data warehouse
+- `dashboard`: Web interface
+- `etl-pipeline`: Pipeline orchestration environment
 
 **Shared Volumes**:
 - `./data`: Shared data directory for CSV files and Manticore persistence
-- `./pipeline`: Pipeline code (mounted to bruin container)
-- `./app`: Gradio application code (mounted to gradio container)
+- `./etl-pipeline`: Pipeline code (mounted to etl container)
+- `./dashboard`: Gradio application code (mounted to dashboard container)
 
 **Networking**:
 - All services on default Docker network
-- Service names used as hostnames (e.g., `http://manticore:9308`)
+- Service names used as hostnames (e.g., `http://search-engine:9308`)
 
 ---
 
@@ -264,7 +264,7 @@ EVA Ingestion → CSV File → Manticore Loading Agent → Manticore Search
 
 **Logging**:
 - Each agent prints status messages to stdout
-- Bruin logs to `pipeline/logs/` directory
+- Bruin logs to `etl-pipeline/logs/` directory
 - Docker Compose captures all container logs
 
 **Health Checks**:

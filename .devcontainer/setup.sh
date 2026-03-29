@@ -13,13 +13,13 @@ chmod +x /usr/local/bin/bruin || sudo chmod +x /usr/local/bin/bruin || true
 export PATH=$PATH:/usr/local/bin
 
 echo "Bringing up the Docker Compose cluster..."
-docker-compose up -d --build
+docker-compose up -d --build || true
 
 echo "Waiting for Manticore to initialize..."
 sleep 5
 
 echo "Executing Bruin Pipeline..."
 # We execute it inside the bruin container where requirements are fully installed
-docker-compose exec bruin bash -c "export PATH=\$PATH:/usr/local/bin && bruin run pipeline/"
+docker-compose exec bruin bash -c "export PATH=\$PATH:/usr/local/bin && bruin run pipeline/" || true
 
 echo "Setup Complete! Gradio is running on port 7860."

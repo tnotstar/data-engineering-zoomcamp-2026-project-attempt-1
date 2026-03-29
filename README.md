@@ -11,7 +11,7 @@ The **European Variation Archive (EVA)** hosts massive datasets of genetic varia
 To ensure this project is accessible for peer review while maintaining professional standards, the following architectural decisions were made:
 
 * **Orchestration via Bruin:** Instead of heavy tools like Airflow, I used **Bruin**. It allows for SQL and Python-based data asset management with built-in data quality checks, making the pipeline modular and easy to track.
-* **Search-Optimized DWH (Manticore Search):** While the course introduces BigQuery, I implemented **Manticore Search** as the serving layer. 
+* **Search-Optimized DWH (Manticore Search):** While the course introduces BigQuery, I implemented **Manticore Search** (as a `searchengine` service) as the serving layer. 
     * *Rationale:* Genomics requires ultra-low latency for specific ID lookups. Manticore acts as an "indexed" Data Warehouse, offering sub-second response times that outperform standard SQL scans for this use case.
 * **Simulated Data Lake:** To keep the project **Zero-Cost** for reviewers, I use a Docker-mounted volume to simulate a Cloud Data Lake (GCS style), ensuring the project runs entirely within a **GitHub Codespace**.
 * **On-the-fly Transformation:** Data is filtered during the download stream. This minimizes disk I/O and avoids storing gigabytes of unnecessary genomic noise.
@@ -21,10 +21,10 @@ To ensure this project is accessible for peer review while maintaining professio
 ## 3. Technology Stack
 | Layer | Tool | Description |
 | :--- | :--- | :--- |
-| **Orchestration** | [Bruin](https://getbruin.com) | Manages dependencies, ingestion logic, and data validation. |
-| **Indexing / DWH** | **Manticore Search** | High-performance search engine used for variant indexing. |
-| **Dashboard** | **Gradio** | Python-based UI for real-time data visualization. |
-| **Containerization**| **Docker Compose** | Orchestrates the entire stack (Manticore, Gradio, Bruin). |
+| **Orchestration** | [Bruin](https://getbruin.com) | Manages dependencies, ingestion logic, and data validation (service `etl-pipeline`). |
+| **Indexing / DWH** | **Manticore Search** | High-performance search engine used for variant indexing (service `search-engine`). |
+| **Dashboard** | **Gradio** | Python-based UI for real-time data visualization (service `dashboard`). |
+| **Containerization**| **Docker Compose** | Orchestrates the entire stack (`search-engine`, `dashboard`, `etl-pipeline`). |
 | **Environment** | **GitHub Codespaces** | Provides a one-click, reproducible development environment. |
 
 ---
@@ -52,13 +52,13 @@ This project is designed to run in a **GitHub Codespace** with zero configuratio
 1.  **Launch Codespace:** Click on the "Open in GitHub Codespaces" button in this repository.
 2.  **Start Services:** Once the terminal is ready, run:
     ```bash
-    docker-compose up -d
+    ./start-services.sh
     ```
 3.  **Run Pipeline:** Execute the Bruin workflow to fetch and index the data:
     ```bash
-    bruin run
+    ./run-etl-pipeline.sh
     ```
-4.  **Access Dashboard:** Open the URL provided by the Gradio container (port `7860`) in your browser.
+4.  **Access Dashboard:** Open the URL provided by the `dashboard` container (port `7860`) in your browser.
 
 ---
 

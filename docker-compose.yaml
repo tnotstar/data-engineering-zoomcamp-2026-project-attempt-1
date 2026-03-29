@@ -1,42 +1,40 @@
-version: '3.8'
-
 services:
-  manticore:
+  search-engine:
     image: manticoresearch/manticore:latest
-    container_name: manticore
+    container_name: search-engine
     ports:
       - "9306:9306"
       - "9308:9308"
     volumes:
       - ./data:/data
-      - ./manticore/setup.sql:/docker-entrypoint-initdb.d/setup.sql
+      - ./search-engine/setup.sql:/docker-entrypoint-initdb.d/setup.sql
     restart: always
 
-  gradio:
+  dashboard:
     build: 
-      context: ./app
+      context: ./dashboard
       dockerfile: Dockerfile
-    container_name: gradio
+    container_name: dashboard
     ports:
       - "7860:7860"
     volumes:
-      - ./app:/app
+      - ./dashboard:/app
     environment:
-      - MANTICORE_URL=http://manticore:9308
+      - MANTICORE_URL=http://search-engine:9308
     depends_on:
-      - manticore
+      - search-engine
     restart: always
 
-  bruin:
+  etl-pipeline:
     build:
-      context: ./pipeline
+      context: ./etl-pipeline
       dockerfile: Dockerfile.bruin
-    container_name: bruin
+    container_name: etl-pipeline
     volumes:
-      - ./pipeline:/pipeline
+      - ./etl-pipeline:/pipeline
       - ./data:/data
     environment:
-      - MANTICORE_URL=http://manticore:9308
+      - MANTICORE_URL=http://search-engine:9308
     command: sleep infinity
     depends_on:
-      - manticore
+      - search-engine
