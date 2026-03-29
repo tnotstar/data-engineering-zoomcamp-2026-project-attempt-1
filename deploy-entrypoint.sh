@@ -9,9 +9,10 @@ set -e
 # Create writable operational directories in /tmp (ephemeral, lost on restart)
 mkdir -p /tmp/manticore-binlog /var/log/manticore /var/run/manticore
 
-# Fix ownership for writable operational dirs only (NOT /data/gold — it's baked in)
+# Fix ownership for all data and operational directories
 if [ "$(id -u)" = '0' ]; then
-    chown manticore:manticore /var/log/manticore /var/run/manticore /tmp/manticore-binlog
+    echo "Fixing permissions for /data and operational directories..."
+    chown -R manticore:manticore /data /var/log/manticore /var/run/manticore /tmp/manticore-binlog
 fi
 
 # Start Manticore in the background

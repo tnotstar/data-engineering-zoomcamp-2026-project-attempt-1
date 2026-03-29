@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="358pt" height="546pt" viewBox="0.00 0.00 358.00 546.00">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 542.2)">
+<title>G</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-542.2 354.12,-542.2 354.12,4 -4,4"/>
+<g id="clust1" class="cluster">
+<title>cluster_datalake</title>
+<polygon fill="none" stroke="#9e9e9e" stroke-dasharray="5,2" points="19.34,-175.4 19.34,-337.8 164.34,-337.8 164.34,-175.4 19.34,-175.4"/>
+<text xml:space="preserve" text-anchor="middle" x="91.84" y="-321.2" font-family="Helvetica,Arial,sans-serif" font-size="14.00">Data Lake / Processing</text>
+</g>
+<g id="clust2" class="cluster">
+<title>cluster_control</title>
+<polygon fill="none" stroke="#cfd8dc" points="150.34,-367.8 150.34,-530.2 292.34,-530.2 292.34,-367.8 150.34,-367.8"/>
+<text xml:space="preserve" text-anchor="middle" x="221.34" y="-513.6" font-family="Helvetica,Arial,sans-serif" font-size="14.00">Control Plane</text>
+</g>
+<!-- Source -->
+<g id="node1" class="node">
+<title>Source</title>
+<polygon fill="#e1f5fe" stroke="#333333" points="136.68,-412.2 0,-412.2 0,-376.2 136.68,-376.2 136.68,-412.2"/>
+<text xml:space="preserve" text-anchor="middle" x="68.34" y="-390.6" font-family="Helvetica,Arial,sans-serif" font-size="12.00">NCBI ALFA FTP / EVA</text>
+</g>
+<!-- B -->
+<g id="node2" class="node">
+<title>B</title>
+<polygon fill="#ffe0b2" stroke="#333333" points="125.67,-305 27.01,-305 27.01,-268.2 125.67,-268.2 125.67,-305"/>
+<text xml:space="preserve" text-anchor="middle" x="76.34" y="-290.2" font-family="Helvetica,Arial,sans-serif" font-size="12.00">Raw Layer</text>
+<text xml:space="preserve" text-anchor="middle" x="76.34" y="-275.8" font-family="Helvetica,Arial,sans-serif" font-size="12.00">(VCF.gz Stream)</text>
+</g>
+<!-- Source&#45;&gt;B -->
+<g id="edge1" class="edge">
+<title>Source-&gt;B</title>
+<path fill="none" stroke="#666666" d="M68.07,-376.07C68.04,-367.05 68.2,-355.82 68.9,-345.8 69.57,-336.23 70.75,-325.82 71.98,-316.48"/>
+<polygon fill="#666666" stroke="#666666" points="75.41,-317.26 73.32,-306.88 68.47,-316.3 75.41,-317.26"/>
+<text xml:space="preserve" text-anchor="middle" x="81.12" y="-348.8" font-family="Helvetica,Arial,sans-serif" font-size="10.00">Ingest</text>
+</g>
+<!-- C -->
+<g id="node3" class="node">
+<title>C</title>
+<polygon fill="#fff9c4" stroke="#333333" points="156.83,-220.2 69.85,-220.2 69.85,-183.4 156.83,-183.4 156.83,-220.2"/>
+<text xml:space="preserve" text-anchor="middle" x="113.34" y="-205.4" font-family="Helvetica,Arial,sans-serif" font-size="12.00">Silver Layer</text>
+<text xml:space="preserve" text-anchor="middle" x="113.34" y="-191" font-family="Helvetica,Arial,sans-serif" font-size="12.00">(Filtered TSV)</text>
+</g>
+<!-- B&#45;&gt;C -->
+<g id="edge2" class="edge">
+<title>B-&gt;C</title>
+<path fill="none" stroke="#666666" d="M71.54,-267.78C69.99,-258.57 69.58,-247.38 73.69,-238.2 75.2,-234.83 77.2,-231.65 79.51,-228.68"/>
+<polygon fill="#666666" stroke="#666666" points="81.9,-231.26 86.13,-221.55 76.77,-226.5 81.9,-231.26"/>
+<text xml:space="preserve" text-anchor="middle" x="112.01" y="-241.2" font-family="Helvetica,Arial,sans-serif" font-size="10.00">Filter &amp; Transform</text>
+</g>
+<!-- D -->
+<g id="node4" class="node">
+<title>D</title>
+<path fill="#c8e6c9" stroke="#333333" d="M298.98,-130.8C298.98,-133.34 267.76,-135.4 229.34,-135.4 190.91,-135.4 159.7,-133.34 159.7,-130.8 159.7,-130.8 159.7,-89.4 159.7,-89.4 159.7,-86.86 190.91,-84.8 229.34,-84.8 267.76,-84.8 298.98,-86.86 298.98,-89.4 298.98,-89.4 298.98,-130.8 298.98,-130.8"/>
+<path fill="none" stroke="#333333" d="M298.98,-130.8C298.98,-128.26 267.76,-126.2 229.34,-126.2 190.91,-126.2 159.7,-128.26 159.7,-130.8"/>
+<text xml:space="preserve" text-anchor="middle" x="229.34" y="-113.7" font-family="Helvetica,Arial,sans-serif" font-size="12.00">Gold Layer</text>
+<text xml:space="preserve" text-anchor="middle" x="229.34" y="-99.3" font-family="Helvetica,Arial,sans-serif" font-size="12.00">(Manticore Search Index)</text>
+</g>
+<!-- C&#45;&gt;D -->
+<g id="edge3" class="edge">
+<title>C-&gt;D</title>
+<path fill="none" stroke="#666666" d="M135.98,-182.95C147.32,-174.03 161.28,-163.11 173.84,-153.4 178.34,-149.92 183.06,-146.3 187.75,-142.7"/>
+<polygon fill="#666666" stroke="#666666" points="189.69,-145.63 195.51,-136.77 185.44,-140.07 189.69,-145.63"/>
+<text xml:space="preserve" text-anchor="middle" x="195.09" y="-156.4" font-family="Helvetica,Arial,sans-serif" font-size="10.00">Bulk Load</text>
+</g>
+<!-- E -->
+<g id="node5" class="node">
+<title>E</title>
+<polygon fill="#d1c4e9" stroke="#333333" points="314.83,-36.8 241.85,-36.8 241.85,0 314.83,0 314.83,-36.8"/>
+<text xml:space="preserve" text-anchor="middle" x="278.34" y="-22" font-family="Helvetica,Arial,sans-serif" font-size="12.00">Dashboard</text>
+<text xml:space="preserve" text-anchor="middle" x="278.34" y="-7.6" font-family="Helvetica,Arial,sans-serif" font-size="12.00">(Gradio UI)</text>
+</g>
+<!-- D&#45;&gt;E -->
+<g id="edge4" class="edge">
+<title>D-&gt;E</title>
+<path fill="none" stroke="#666666" d="M234.71,-84.39C237.4,-74.77 241.22,-63.89 246.42,-54.8 248.23,-51.64 250.36,-48.52 252.64,-45.52"/>
+<polygon fill="#666666" stroke="#666666" points="255.1,-48.03 258.84,-38.12 249.74,-43.54 255.1,-48.03"/>
+<text xml:space="preserve" text-anchor="middle" x="279.88" y="-57.8" font-family="Helvetica,Arial,sans-serif" font-size="10.00">Real-time Query</text>
+</g>
+<!-- F -->
+<g id="node6" class="node">
+<title>F</title>
+<polygon fill="#f8bbd0" stroke="#333333" points="247.99,-412.6 158.69,-412.6 158.69,-408.6 154.69,-408.6 154.69,-404.6 158.69,-404.6 158.69,-383.8 154.69,-383.8 154.69,-379.8 158.69,-379.8 158.69,-375.8 247.99,-375.8 247.99,-412.6"/>
+<polyline fill="none" stroke="#333333" points="158.69,-408.6 162.69,-408.6 162.69,-404.6 158.69,-404.6"/>
+<polyline fill="none" stroke="#333333" points="158.69,-383.8 162.69,-383.8 162.69,-379.8 158.69,-379.8"/>
+<text xml:space="preserve" text-anchor="middle" x="203.34" y="-397.8" font-family="Helvetica,Arial,sans-serif" font-size="12.00">Bruin Pipeline</text>
+<text xml:space="preserve" text-anchor="middle" x="203.34" y="-383.4" font-family="Helvetica,Arial,sans-serif" font-size="12.00">(Orchestration)</text>
+</g>
+<!-- F&#45;&gt;B -->
+<g id="edge5" class="edge">
+<title>F-&gt;B</title>
+<path fill="none" stroke="#666666" stroke-dasharray="1,5" d="M163.89,-375.43C157.72,-372.79 151.38,-370.16 145.34,-367.8 132.69,-362.85 126.92,-366.47 116.46,-357.8 103.12,-346.73 93.31,-330 86.73,-315.65"/>
+<polygon fill="#666666" stroke="#666666" points="90.05,-314.5 82.92,-306.67 83.6,-317.24 90.05,-314.5"/>
+<text xml:space="preserve" text-anchor="middle" x="133.4" y="-348.8" font-family="Helvetica,Arial,sans-serif" font-size="10.00">Triggers</text>
+</g>
+<!-- F&#45;&gt;C -->
+<g id="edge6" class="edge">
+<title>F-&gt;C</title>
+<path fill="none" stroke="#666666" stroke-dasharray="1,5" d="M194.65,-375.5C189.56,-364.76 183.25,-350.67 178.58,-337.8 162.87,-294.55 174.07,-277.62 150.34,-238.2 148.41,-235 146.12,-231.9 143.64,-228.95"/>
+<polygon fill="#666666" stroke="#666666" points="146.23,-226.59 136.82,-221.7 141.13,-231.39 146.23,-226.59"/>
+<text xml:space="preserve" text-anchor="middle" x="197.46" y="-283.6" font-family="Helvetica,Arial,sans-serif" font-size="10.00">Validates</text>
+</g>
+<!-- F&#45;&gt;D -->
+<g id="edge7" class="edge">
+<title>F-&gt;D</title>
+<path fill="none" stroke="#666666" stroke-dasharray="1,5" d="M208.35,-375.39C211.17,-364.6 214.5,-350.51 216.34,-337.8 226.02,-270.97 228.57,-192.08 229.19,-147.18"/>
+<polygon fill="#666666" stroke="#666666" points="232.69,-147.28 229.3,-137.24 225.69,-147.2 232.69,-147.28"/>
+<text xml:space="preserve" text-anchor="middle" x="241.37" y="-241.2" font-family="Helvetica,Arial,sans-serif" font-size="10.00">Indexes</text>
+</g>
+<!-- G -->
+<g id="node7" class="node">
+<title>G</title>
+<polygon fill="#b2dfdb" stroke="#333333" points="283.98,-497.4 162.7,-497.4 158.7,-493.4 158.7,-460.6 279.98,-460.6 283.98,-464.6 283.98,-497.4"/>
+<polyline fill="none" stroke="#333333" points="279.98,-493.4 158.7,-493.4"/>
+<polyline fill="none" stroke="#333333" points="279.98,-493.4 279.98,-460.6"/>
+<polyline fill="none" stroke="#333333" points="279.98,-493.4 283.98,-497.4"/>
+<text xml:space="preserve" text-anchor="middle" x="221.34" y="-482.6" font-family="Helvetica,Arial,sans-serif" font-size="12.00">Infrastructure</text>
+<text xml:space="preserve" text-anchor="middle" x="221.34" y="-468.2" font-family="Helvetica,Arial,sans-serif" font-size="12.00">(Docker / Codespaces)</text>
+</g>
+<!-- G&#45;&gt;D -->
+<g id="edge9" class="edge">
+<title>G-&gt;D</title>
+<path fill="none" stroke="#666666" stroke-dasharray="1,5" d="M242.13,-460.17C257.71,-444.74 276.34,-420.91 276.34,-395.2 276.34,-395.2 276.34,-395.2 276.34,-200.8 276.34,-180.85 267.11,-160.97 256.83,-145.01"/>
+<polygon fill="#666666" stroke="#666666" points="259.77,-143.12 251.22,-136.86 254.01,-147.08 259.77,-143.12"/>
+<text xml:space="preserve" text-anchor="middle" x="287.73" y="-283.6" font-family="Helvetica,Arial,sans-serif" font-size="10.00">Hosts</text>
+</g>
+<!-- G&#45;&gt;E -->
+<g id="edge10" class="edge">
+<title>G-&gt;E</title>
+<path fill="none" stroke="#666666" stroke-dasharray="1,5" d="M271.86,-460.24C299.16,-447.07 327.34,-426.02 327.34,-395.2 327.34,-395.2 327.34,-395.2 327.34,-109.1 327.34,-84.18 325.64,-76.48 313.34,-54.8 311.51,-51.57 309.3,-48.42 306.9,-45.43"/>
+<polygon fill="#666666" stroke="#666666" points="309.59,-43.18 300.3,-38.07 304.38,-47.85 309.59,-43.18"/>
+<text xml:space="preserve" text-anchor="middle" x="338.73" y="-241.2" font-family="Helvetica,Arial,sans-serif" font-size="10.00">Hosts</text>
+</g>
+<!-- G&#45;&gt;F -->
+<g id="edge8" class="edge">
+<title>G-&gt;F</title>
+<path fill="none" stroke="#666666" stroke-dasharray="1,5" d="M217.52,-460.44C215.22,-449.86 212.24,-436.14 209.6,-424.01"/>
+<polygon fill="#666666" stroke="#666666" points="213.08,-423.53 207.54,-414.5 206.24,-425.01 213.08,-423.53"/>
+<text xml:space="preserve" text-anchor="middle" x="224.81" y="-433.6" font-family="Helvetica,Arial,sans-serif" font-size="10.00">Hosts</text>
+</g>
+</g>
+</svg>

@@ -1,70 +1,95 @@
-# European Variation Archive (EVA) Genomic Insights: High-Performance Population Frequency Pipeline
+# Genomic Variant Population Frequency Pipeline: Medallion Architecture
 
-## 1. Problem Statement
-The **European Variation Archive (EVA)** hosts massive datasets of genetic variations. For researchers, analyzing population frequencies (e.g., how common a mutation is in Europeans vs. Africans) is a "big data" challenge. Raw VCF/TSV files are often too large to query directly, and traditional Data Warehouses can be overkill or too slow for real-time variant lookups.
+[![DE Zoomcamp 2026](https://img.shields.io/badge/Data%20Engineering-Zoomcamp%202026-blue)](https://github.com/DataTalksClub/data-engineering-zoomcamp)
+[![Bruin](https://img.shields.io/badge/Orchestrator-Bruin-orange)](https://getbruin.com)
+[![Manticore Search](https://img.shields.io/badge/Database-Manticore%20Search-brightgreen)](https://manticoresearch.com)
+[![Gradio](https://img.shields.io/badge/Dashboard-Gradio-red)](https://gradio.app)
 
-**The Goal:** Build an end-to-end, **low-cost**, and **highly reproducible** pipeline to ingest, filter "on-the-fly," and index genomic data. This project enables real-time queries of population frequencies through an interactive dashboard.
+## 1. Project Overview
+This project implements an end-to-end data engineering pipeline to ingest, transform, and serve genomic variation data from the **NCBI ALFA (Allele Frequency Aggregator)** project. Using a **Medallion Architecture** (Raw → Silver → Gold), we process over 1.6 million genomic variants across 12 diverse global populations, providing a high-performance search engine and an interactive dashboard for researchers.
 
----
-
-## 2. Architecture & Design Decisions
-To ensure this project is accessible for peer review while maintaining professional standards, the following architectural decisions were made:
-
-* **Orchestration via Bruin:** Instead of heavy tools like Airflow, I used **Bruin**. It allows for SQL and Python-based data asset management with built-in data quality checks, making the pipeline modular and easy to track.
-* **Search-Optimized DWH (Manticore Search):** While the course introduces BigQuery, I implemented **Manticore Search** (as a `searchengine` service) as the serving layer. 
-    * *Rationale:* Genomics requires ultra-low latency for specific ID lookups. Manticore acts as an "indexed" Data Warehouse, offering sub-second response times that outperform standard SQL scans for this use case.
-* **Simulated Data Lake:** To keep the project **Zero-Cost** for reviewers, I use a Docker-mounted volume to simulate a Cloud Data Lake (GCS style), ensuring the project runs entirely within a **GitHub Codespace**.
-* **On-the-fly Transformation:** Data is filtered during the download stream. This minimizes disk I/O and avoids storing gigabytes of unnecessary genomic noise.
+### The Problem
+Genomic data (VCF files) is notoriously difficult to query. Raw files are massive, and traditional SQL databases are often too slow for millions of real-time "rsID" lookups. Researchers need a way to visualize ethnic allele frequencies (e.g., European vs. East Asian) with sub-second latency.
 
 ---
 
-## 3. Technology Stack
-| Layer | Tool | Description |
+## 2. Architecture Diagram
+The pipeline follows a modern data stack centered around performance and reproducibility.
+
+![Architecture Diagram](architecture.svg)
+
+---
+
+## 3. Technology Stack & Design Decisions
+| Layer | Tool | Rationale |
 | :--- | :--- | :--- |
-| **Orchestration** | [Bruin](https://getbruin.com) | Manages dependencies, ingestion logic, and data validation (service `etl-pipeline`). |
-| **Indexing / DWH** | **Manticore Search** | High-performance search engine used for variant indexing (service `search-engine`). |
-| **Dashboard** | **Gradio** | Python-based UI for real-time data visualization (service `dashboard`). |
-| **Containerization**| **Docker Compose** | Orchestrates the entire stack (`search-engine`, `dashboard`, `etl-pipeline`). |
-| **Environment** | **GitHub Codespaces** | Provides a one-click, reproducible development environment. |
+| **Orchestration** | **Bruin** | A modern, Python/SQL-native orchestrator. Chosen over Airflow for its lightweight footprint and excellent handling of data asset dependencies. |
+| **Data Processing**| **bcftools & awk** | Industry-standard tools for high-speed VCF streaming. Used to calculate allele frequencies on-the-fly from AC (Allele Count) and AN (Allele Number). |
+| **Data Warehouse** | **Manticore Search**| Served as our "Gold Layer". Optimized for full-text search (Variant IDs) and analytical queries with sub-millisecond response times. |
+| **Visualization** | **Gradio + Plotly** | Provides a professional interactive interface with real-time distribution plots and categorical bar charts of 12 populations. |
+| **Containerization**| **Docker** | Ensures "Zero-Config" reproducibility for reviewers using either Docker Compose or a consolidated Cloud Run Dockerfile. |
 
 ---
 
-## 4. The Data Pipeline
-The pipeline is managed by **Bruin** and consists of three main stages:
-
-1.  **Ingestion & Filter:** A Python asset streams data from EVA, filters for a specific chromosome (e.g., Chromosome 21), and cleans population metadata.
-2.  **Storage:** The cleaned data is persisted as a `.csv` in the local data lake.
-3.  **Indexing:** Data is bulk-loaded into Manticore Search. 
-    * *Optimization:* Tables are **clustered by Variant ID** and indexed for range queries on genomic positions to ensure maximum performance.
+## 4. Medallion Data Layers
+*   **Raw Layer (`/data/raw`)**: Original VCF format subset from NCBI FTP. Preserved in compressed `.vcf.gz` to maintain data lineage.
+*   **Silver Layer (`/data/silver`)**: Structured `.tsv` data. Includes calculated allele frequencies for 12 populations (AFR, AMR, EAS, EUR, SAS, AJ, FIPA, CAU, OTH, APL, ASN, AMR_CAU).
+*   **Gold Layer (Manticore Index)**: Search-optimized table `eva_variants`. Features infix indexing for flexible variant searching.
 
 ---
 
-## 5. Dashboard Features
-The Gradio UI provides two primary tiles for data analysis:
-* **Tile 1: Categorical Distribution:** A bar chart visualizing Allele Frequencies across different ethnic populations (e.g., EUR, AFR, AMR, EAS, SAS).
-* **Tile 2: Regional Statistics:** A distribution plot showing the density of variations across the genomic region of interest.
+## 5. Technical Highlights (Work Accomplished)
+- **Consolidated Build Pipeline**: Developed a `Dockerfile.cloudrun` that **"bakes"** the data into the image during build time. This ensures the Cloud Run instance starts with a fully populated DWH without runtime delays.
+- **Robustness**: Implemented 141 (SIGPIPE) signal handling in the streaming pipeline to allow efficient subsetting of massive genomic files without breaking the build process.
+- **Data Quality**: Used Bruin's validation features and Python-based error checking to handle NULLs and contig-header discrepancies in public NCBI data.
+- **Multi-Service Entrypoint**: Custom `deploy-entrypoint.sh` that manages both the Manticore search engine and the Gradio dashboard concurrently within a single container.
 
 ---
 
-## 6. How to Reproduce (Peer-Review Guide)
-This project is designed to run in a **GitHub Codespace** with zero configuration.
+## 6. How to Reproduce (Reviewer Guide)
 
-1.  **Launch Codespace:** Click on the "Open in GitHub Codespaces" button in this repository.
-2.  **Start Services:** Once the terminal is ready, run:
+### Option A: 🚀 Quick Start with GitHub Codespaces (One-Click)
+This project is pre-configured for **Zero-Config reproduction** using GitHub Codespaces.
+1.  **Launch**: Click the **Code** button in this repo, select the **Codespaces** tab, and click **Create codespace on main**.
+2.  **Wait for provision**: The environment will automatically install Docker-in-Docker and forward the necessary ports (7860 for Dashboard, 9308 for Manticore).
+3.  **Run Pipeline**:
+    ```bash
+    ./start-services.sh
+    ./run-etl-pipeline.sh
+    ```
+4.  **View Results**: VS Code will show a notification that ports are forwarded. Open the local address for port `7860` to see the dashboard.
+
+### Option B: Local Development (Docker Compose)
+Ideal for seeing the agents in action on your machine.
+1.  **Start Services**:
     ```bash
     ./start-services.sh
     ```
-3.  **Run Pipeline:** Execute the Bruin workflow to fetch and index the data:
+2.  **Execute Pipeline**:
     ```bash
     ./run-etl-pipeline.sh
     ```
-4.  **Access Dashboard:** Open the URL provided by the `dashboard` container (port `7860`) in your browser.
+3.  **Access Dashboard**: Visit `http://localhost:7860` in your browser.
+
+### Option C: Production Container (Cloud Run Mode)
+This build will run the ETL **internally** during construction.
+1.  **Build and Run**:
+    ```bash
+    docker build -f deploy/Dockerfile.cloudrun -t eva-cloudrun .
+    docker run -p 8080:8080 eva-cloudrun
+    ```
+2.  **Access Dashboard**: Visit `http://localhost:8080`.
 
 ---
 
-## 7. Peer-Review Evaluation Criteria Checklist
-* **Cloud/IaC:** Simulated via Docker/Codespaces for cost-efficiency.
-* **Workflow Orchestration:** Fully managed by Bruin (End-to-End DAG).
-* **Data Warehouse:** Manticore Search used with explicit indexing and clustering for query optimization.
-* **Transformations:** Defined in Python/SQL within the Bruin assets.
-* **Dashboard:** 2+ tiles built in Gradio.
+## 7. Submission Checklist
+- [x] **Containerization**: Full Docker support.
+- [x] **Cloud/IaC**: Consolidated Docker strategy for Google Cloud Run.
+- [x] **Orchestration**: End-to-end Bruin DAG.
+- [x] **DWH**: Manticore Search with explicit indexing.
+- [x] **Dashboard**: 2+ interactive tiles (Search, Distribution, Frequencies).
+- [x] **Reproducibility**: One-script setup (`start-services.sh`).
+
+---
+**Author:** Data Engineering Zoomcamp 2026 Project
+**Data Source:** [NCBI ALFA Project](https://www.ncbi.nlm.nih.gov/snp/docs/gsr/alfa/)
