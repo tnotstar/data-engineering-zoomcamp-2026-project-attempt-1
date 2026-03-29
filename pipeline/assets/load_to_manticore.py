@@ -3,8 +3,10 @@ name: load_to_manticore
 depends:
   - ingest_eva
 image: python:3.11-slim
+connection: duckdb
 materialization:
-  type: none
+  type: table
+  strategy: create+replace
 @bruin"""
 
 import pandas as pd
@@ -61,3 +63,4 @@ def materialize():
             time.sleep(2)
             
     print("Loading Task Complete.")
+    return pd.DataFrame([{"status": "load_complete"}])

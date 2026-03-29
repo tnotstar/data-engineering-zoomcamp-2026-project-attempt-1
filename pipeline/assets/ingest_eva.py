@@ -1,8 +1,10 @@
 """@bruin
 name: ingest_eva
 image: python:3.11-slim
+connection: duckdb
 materialization:
-  type: none
+  type: table
+  strategy: create+replace
 columns:
   - name: variant_id
     type: string
