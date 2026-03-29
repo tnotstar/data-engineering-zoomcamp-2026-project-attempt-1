@@ -36,7 +36,7 @@ RUN mkdir -p /data/raw && \
 FROM python:3.11-slim AS silver
 
 RUN apt-get update && \
-    apt-get install -y bcftools && \
+    apt-get install -y bcftools tabix && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=raw /data/raw /data/raw
