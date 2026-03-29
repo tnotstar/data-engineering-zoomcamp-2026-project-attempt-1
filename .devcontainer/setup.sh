@@ -8,8 +8,8 @@ cd /workspaces/data-engineering-zoomcamp-2026-project-attempt-1
 
 echo "Installing Bruin CLI on Host..."
 curl -sL https://github.com/bruin-data/bruin/releases/latest/download/bruin_Linux_x86_64.tar.gz | tar -xz
-mv bruin /usr/local/bin/bruin || sudo mv bruin /usr/local/bin/bruin
-chmod +x /usr/local/bin/bruin || sudo chmod +x /usr/local/bin/bruin
+mv bruin /usr/local/bin/bruin || sudo mv bruin /usr/local/bin/bruin || true
+chmod +x /usr/local/bin/bruin || sudo chmod +x /usr/local/bin/bruin || true
 export PATH=$PATH:/usr/local/bin
 
 echo "Bringing up the Docker Compose cluster..."
