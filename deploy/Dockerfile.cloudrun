@@ -36,6 +36,7 @@ RUN pip install --no-cache-dir -r /tmp/dashboard-requirements.txt -r /tmp/etl-re
 # 4. Copy project assets
 # We'll use /pipeline for ETL and /app for Dashboard
 WORKDIR /pipeline
+RUN mkdir -p /pipeline/.git
 COPY etl-pipeline/ .
 
 WORKDIR /app
