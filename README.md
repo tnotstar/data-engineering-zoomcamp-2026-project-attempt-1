@@ -1,40 +1,70 @@
-<p align="center">
-  <img alt="Bruin Logo" src="./resources/logo-horizontal.svg" width="500" />
-</p>
+# European Variation Archive (EVA) Genomic Insights: High-Performance Population Frequency Pipeline
 
-Bruin is a data pipeline tool that brings together data ingestion, data transformation with SQL, Python & R, and data quality into a single framework. It works with all the major data platforms and runs on your local machine, an EC2 instance, or GitHub Actions.
+## 1. Problem Statement
+The **European Variation Archive (EVA)** hosts massive datasets of genetic variations. For researchers, analyzing population frequencies (e.g., how common a mutation is in Europeans vs. Africans) is a "big data" challenge. Raw VCF/TSV files are often too large to query directly, and traditional Data Warehouses can be overkill or too slow for real-time variant lookups.
 
-<img alt="Bruin CLI - Demo" src="./resources/demo.gif" width="1200" />
+**The Goal:** Build an end-to-end, **low-cost**, and **highly reproducible** pipeline to ingest, filter "on-the-fly," and index genomic data. This project enables real-time queries of population frequencies through an interactive dashboard.
 
-Bruin is packed with features:
+---
 
-- 📥 ingest data with [ingestr](https://github.com/bruin-data/ingestr) / Python
-- ✨ run SQL, Python & R transformations on [many platforms](https://getbruin.com/docs/bruin/#supported-platforms)
-- 📐 table/view [materializations](https://getbruin.com/docs/bruin/assets/materialization.html), incremental tables
-- 🐍 run Python in isolated environments using [uv](https://github.com/astral-sh/uv)
-- 💅 built-in data quality checks
-- 🚀 Jinja templating to avoid repetition
-- ✅ validate pipelines end-to-end via dry-run
-- 👷 run on your local machine, an EC2 instance, or [GitHub Actions](https://getbruin.com/docs/bruin/cicd/github-action.html)
-- 🔒 secrets injection via environment variables
-- [VS Code extension](https://getbruin.com/docs/bruin/vscode-extension/overview.html) for a better developer experience
-- ⚡ written in Golang
-- 📦 [easy to install](https://getbruin.com/docs/bruin/getting-started/introduction/installation.html) and use
+## 2. Architecture & Design Decisions
+To ensure this project is accessible for peer review while maintaining professional standards, the following architectural decisions were made:
 
-## Installation
+* **Orchestration via Bruin:** Instead of heavy tools like Airflow, I used **Bruin**. It allows for SQL and Python-based data asset management with built-in data quality checks, making the pipeline modular and easy to track.
+* **Search-Optimized DWH (Manticore Search):** While the course introduces BigQuery, I implemented **Manticore Search** as the serving layer. 
+    * *Rationale:* Genomics requires ultra-low latency for specific ID lookups. Manticore acts as an "indexed" Data Warehouse, offering sub-second response times that outperform standard SQL scans for this use case.
+* **Simulated Data Lake:** To keep the project **Zero-Cost** for reviewers, I use a Docker-mounted volume to simulate a Cloud Data Lake (GCS style), ensuring the project runs entirely within a **GitHub Codespace**.
+* **On-the-fly Transformation:** Data is filtered during the download stream. This minimizes disk I/O and avoids storing gigabytes of unnecessary genomic noise.
 
-Please see the installation instructions [here](https://getbruin.com/docs/bruin/getting-started/introduction/installation.html).
+---
 
-## Community
+## 3. Technology Stack
+| Layer | Tool | Description |
+| :--- | :--- | :--- |
+| **Orchestration** | [Bruin](https://getbruin.com) | Manages dependencies, ingestion logic, and data validation. |
+| **Indexing / DWH** | **Manticore Search** | High-performance search engine used for variant indexing. |
+| **Dashboard** | **Gradio** | Python-based UI for real-time data visualization. |
+| **Containerization**| **Docker Compose** | Orchestrates the entire stack (Manticore, Gradio, Bruin). |
+| **Environment** | **GitHub Codespaces** | Provides a one-click, reproducible development environment. |
 
-Join our Slack community [here](https://join.slack.com/t/bruindatacommunity/shared_invite/zt-3cymzktqu-bvFxPGyQHpvi~dok_W0L3w).
+---
 
-<div style="margin-top: 24px;">
-  <a target="_blank" href="https://join.slack.com/t/bruindatacommunity/shared_invite/zt-3cymzktqu-bvFxPGyQHpvi~dok_W0L3w" style="background:none">
-    <img alt="Join Bruin Slack Community" src="https://img.shields.io/badge/slack-join-dlt.svg?color=d95f5f&logo=slack" style="width: 180px;"  />
-  </a>
-</div>
+## 4. The Data Pipeline
+The pipeline is managed by **Bruin** and consists of three main stages:
 
-## Quickstart
+1.  **Ingestion & Filter:** A Python asset streams data from EVA, filters for a specific chromosome (e.g., Chromosome 21), and cleans population metadata.
+2.  **Storage:** The cleaned data is persisted as a `.csv` in the local data lake.
+3.  **Indexing:** Data is bulk-loaded into Manticore Search. 
+    * *Optimization:* Tables are **clustered by Variant ID** and indexed for range queries on genomic positions to ensure maximum performance.
 
-Take a look at our quickstart guide [here](https://getbruin.com/docs/bruin/getting-started/introduction/quickstart.html).
+---
+
+## 5. Dashboard Features
+The Gradio UI provides two primary tiles for data analysis:
+* **Tile 1: Categorical Distribution:** A bar chart visualizing Allele Frequencies across different ethnic populations (e.g., EUR, AFR, AMR, EAS, SAS).
+* **Tile 2: Regional Statistics:** A distribution plot showing the density of variations across the genomic region of interest.
+
+---
+
+## 6. How to Reproduce (Peer-Review Guide)
+This project is designed to run in a **GitHub Codespace** with zero configuration.
+
+1.  **Launch Codespace:** Click on the "Open in GitHub Codespaces" button in this repository.
+2.  **Start Services:** Once the terminal is ready, run:
+    ```bash
+    docker-compose up -d
+    ```
+3.  **Run Pipeline:** Execute the Bruin workflow to fetch and index the data:
+    ```bash
+    bruin run
+    ```
+4.  **Access Dashboard:** Open the URL provided by the Gradio container (port `7860`) in your browser.
+
+---
+
+## 7. Peer-Review Evaluation Criteria Checklist
+* **Cloud/IaC:** Simulated via Docker/Codespaces for cost-efficiency.
+* **Workflow Orchestration:** Fully managed by Bruin (End-to-End DAG).
+* **Data Warehouse:** Manticore Search used with explicit indexing and clustering for query optimization.
+* **Transformations:** Defined in Python/SQL within the Bruin assets.
+* **Dashboard:** 2+ tiles built in Gradio.
